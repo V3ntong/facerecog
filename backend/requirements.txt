@@ -1,0 +1,14 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.18
+pyodbc==5.1.0
+sqlalchemy==2.0.36
+numpy==1.26.4
+onnxruntime==1.20.1
+opencv-python-headless==4.10.0.84
+Pillow==11.1.0
+python-dotenv==1.0.1
+httpx==0.28.1
+pydantic==2.10.4
+pydantic-settings==2.7.1
+aiofiles==24.1.0

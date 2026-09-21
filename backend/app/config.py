@@ -1,0 +1,60 @@
+import os
+from pydantic_settings import BaseSettings
+from pathlib import Path
+
+
+class Settings(BaseSettings):
+    DB_SERVER: str = "localhost"
+    DB_NAME: str = "FaceRecognitionDB"
+    DB_DRIVER: str = "{ODBC Driver 18 for SQL Server}"
+    DB_TRUST_SERVER_CERTIFICATE: str = "yes"
+    DB_AUTH: str = "trusted"
+    DB_USER: str = ""
+    DB_PASSWORD: str = ""
+
+    RECOGNITION_THRESHOLD: float = 0.45
+    FACE_MIN_SIZE: int = 40
+
+    AI_PROVIDER: str = "anthropic"
+    AI_MODEL: str = "claude-sonnet-4-20250514"
+    AI_API_KEY: str = ""
+
+    DATASET_DIR: str = r"C:\FaceDataset"
+
+    HOST: str = "0.0.0.0"
+    PORT: int = 8000
+    MAX_UPLOAD_SIZE_MB: int = 100
+    RATE_LIMIT_PER_MINUTE: int = 60
+
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+
+    @property
+    def connection_string(self) -> str:
+        base = (
+            f"DRIVER={self.DB_DRIVER};"
+            f"SERVER={self.DB_SERVER};"
+            f"DATABASE={self.DB_NAME};"
+            f"TrustServerCertificate={self.DB_TRUST_SERVER_CERTIFICATE};"
+        )
+        if self.DB_AUTH.lower() == "trusted":
+            return base + "Trusted_Connection=yes;"
+        return base + f"UID={self.DB_USER};PWD={self.DB_PASSWORD};"
+
+    @property
+    def sqlalchemy_url(self) -> str:
+        if self.DB_AUTH.lower() == "trusted":
+            return (
+                f"mssql+pyodbc://{self.DB_SERVER}/{self.DB_NAME}"
+                f"?driver=ODBC+Driver+18+for+SQL+Server"
+                f"&TrustServerCertificate=yes"
+                f"&trusted_connection=yes"
+            )
+        return (
+            f"mssql+pyodbc://{self.DB_USER}:{self.DB_PASSWORD}"
+            f"@{self.DB_SERVER}/{self.DB_NAME}"
+            f"?driver=ODBC+Driver+18+for+SQL+Server"
+            f"&TrustServerCertificate=yes"
+        )
+
+
+settings = Settings()
