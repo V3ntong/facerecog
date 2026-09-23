@@ -2,15 +2,29 @@ import { useState, useRef, useCallback, useEffect } from "react";
 
 interface Props {
   onCapture: (blob: Blob) => void;
+  onVideoRecorded: (blob: Blob) => void;
   loading: boolean;
 }
 
-export default function CameraMode({ onCapture, loading }: Props) {
+const REC_DURATION_MS = 60_000;
+const COUNTDOWN_FROM_MS = 10_000;
+
+const recorderSupported =
+  typeof window !== "undefined" &&
+  typeof MediaRecorder !== "undefined" &&
+  MediaRecorder.isTypeSupported("video/webm");
+
+export default function CameraMode({ onCapture, onVideoRecorded, loading }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [streaming, setStreaming] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [recTime, setRecTime] = useState(0);
   const streamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<number | null>(null);
 
   const startCamera = useCallback(async () => {
     setCameraError(null);
@@ -35,13 +49,67 @@ export default function CameraMode({ onCapture, loading }: Props) {
     }
   }, []);
 
+  const stopRecording = useCallback(() => {
+    if (timerRef.current !== null) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {
+        // ignore
+      }
+    }
+    mediaRecorderRef.current = null;
+    setRecording(false);
+  }, []);
+
   const stopCamera = useCallback(() => {
+    stopRecording();
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
     setStreaming(false);
-  }, []);
+  }, [stopRecording]);
+
+  const startRecording = useCallback(() => {
+    if (!recorderSupported) {
+      setCameraError("Video recording is not supported in this browser.");
+      return;
+    }
+    if (!streaming || !streamRef.current) return;
+
+    chunksRef.current = [];
+    let mr: MediaRecorder;
+    try {
+      mr = new MediaRecorder(streamRef.current, { mimeType: "video/webm" });
+    } catch {
+      setCameraError("Could not start video recording. Try a still capture instead.");
+      return;
+    }
+
+    mr.ondataavailable = (e) => {
+      if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+    };
+    mr.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: "video/webm" });
+      chunksRef.current = [];
+      if (blob.size > 0) onVideoRecorded(blob);
+    };
+
+    mediaRecorderRef.current = mr;
+    mr.start(1000);
+    const started = Date.now();
+    setRecTime(0);
+    setRecording(true);
+    timerRef.current = window.setInterval(() => {
+      const elapsed = Date.now() - started;
+      setRecTime(elapsed);
+      if (elapsed >= REC_DURATION_MS) stopRecording();
+    }, 200);
+  }, [streaming, onVideoRecorded, stopRecording]);
 
   // Attach the stream once the <video> element is actually mounted
   // (it is conditionally rendered only when `streaming` is true).
@@ -73,8 +141,13 @@ export default function CameraMode({ onCapture, loading }: Props) {
   }, [onCapture]);
 
   useEffect(() => {
-    return () => stopCamera();
+    return () => {
+      stopCamera();
+    };
   }, [stopCamera]);
+
+  const remaining = Math.max(0, REC_DURATION_MS - recTime);
+  const inCountdown = recording && remaining <= COUNTDOWN_FROM_MS;
 
   return (
     <div className="space-y-4">
@@ -87,6 +160,19 @@ export default function CameraMode({ onCapture, loading }: Props) {
           }}
         >
           {cameraError}
+        </div>
+      )}
+
+      {!recorderSupported && (
+        <div
+          className="px-4 py-3 rounded-xl text-sm"
+          style={{
+            background: "color-mix(in srgb, var(--warning, #f59e0b) 10%, var(--bg-card))",
+            color: "var(--warning, #f59e0b)",
+            border: "1px solid color-mix(in srgb, var(--warning, #f59e0b) 25%, transparent)",
+          }}
+        >
+          Video recording is not supported in this browser. Still capture is still available.
         </div>
       )}
 
@@ -104,22 +190,63 @@ export default function CameraMode({ onCapture, loading }: Props) {
               className="w-full rounded-2xl"
               style={{ transform: "scaleX(-1)" }}
             />
+            {/* Recording indicator + timer */}
+            {recording && (
+              <div className="absolute top-3 right-3 flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium"
+                style={{
+                  background: "rgba(0,0,0,0.6)",
+                  color: inCountdown ? "#f87171" : "#ffffff",
+                }}
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-full animate-pulse"
+                  style={{
+                    background: inCountdown ? "#f87171" : "#f87171",
+                    boxShadow: "0 0 0 0 rgba(248,113,113,0.6)",
+                  }}
+                />
+                {inCountdown
+                  ? `Stopping in ${Math.ceil(remaining / 1000)}s`
+                  : `REC ${formatTime(recTime / 1000)}`}
+              </div>
+            )}
             <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-3">
-              <button
-                onClick={capture}
-                disabled={loading}
-                className="px-6 py-2.5 rounded-xl text-sm font-medium text-white transition-all cursor-pointer disabled:opacity-50"
-                style={{ background: "var(--accent)" }}
-              >
-                {loading ? "Processing..." : "Capture"}
-              </button>
-              <button
-                onClick={stopCamera}
-                className="px-6 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer"
-                style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)" }}
-              >
-                Stop
-              </button>
+              {recording ? (
+                <button
+                  onClick={stopRecording}
+                  className="px-6 py-2.5 rounded-xl text-sm font-medium text-white transition-all cursor-pointer"
+                  style={{ background: "#dc2626" }}
+                >
+                  Stop Recording
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={capture}
+                    disabled={loading}
+                    className="px-6 py-2.5 rounded-xl text-sm font-medium text-white transition-all cursor-pointer disabled:opacity-50"
+                    style={{ background: "var(--accent)" }}
+                  >
+                    {loading ? "Processing..." : "Capture"}
+                  </button>
+                  <button
+                    onClick={startRecording}
+                    disabled={!recorderSupported}
+                    className="px-6 py-2.5 rounded-xl text-sm font-medium text-white transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ background: "#dc2626" }}
+                    title="Record up to 60 seconds of video to recognize"
+                  >
+                    Record video
+                  </button>
+                  <button
+                    onClick={stopCamera}
+                    className="px-6 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer"
+                    style={{ background: "var(--bg-secondary)", color: "var(--text-secondary)" }}
+                  >
+                    Stop
+                  </button>
+                </>
+              )}
             </div>
           </>
         ) : (
@@ -147,4 +274,10 @@ export default function CameraMode({ onCapture, loading }: Props) {
       <canvas ref={canvasRef} className="hidden" />
     </div>
   );
+}
+
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
 }

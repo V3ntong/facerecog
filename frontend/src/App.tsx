@@ -3,11 +3,12 @@ import type { RecognitionResult } from "./types";
 import { recognizeFile, recognizeFrame } from "./api";
 import UploadMode from "./components/UploadMode";
 import CameraMode from "./components/CameraMode";
+import EnrollMode from "./components/EnrollMode";
 import ResultCard from "./components/ResultCard";
 import Header from "./components/Header";
 import ErrorBanner from "./components/ErrorBanner";
 
-type Mode = "upload" | "camera";
+type Mode = "upload" | "camera" | "enroll";
 
 export default function App() {
   const [mode, setMode] = useState<Mode>("upload");
@@ -52,13 +53,21 @@ export default function App() {
     }
   }, []);
 
+  const handleVideoRecorded = useCallback(
+    async (blob: Blob) => {
+      const file = new File([blob], "camera-recording.webm", { type: "video/webm" });
+      await handleFileUpload(file);
+    },
+    [handleFileUpload]
+  );
+
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--bg-primary)" }}>
       <Header dark={dark} onToggleDark={() => setDark(!dark)} />
 
       <main className="flex-1 w-full max-w-3xl mx-auto px-4 pb-12">
         <div className="flex justify-center gap-1 mb-6 mt-2 p-1 rounded-xl" style={{ background: "var(--bg-secondary)" }}>
-          {(["upload", "camera"] as Mode[]).map((m) => (
+          {(["upload", "camera", "enroll"] as Mode[]).map((m) => (
             <button
               key={m}
               onClick={() => { setMode(m); setResult(null); setError(null); }}
@@ -69,18 +78,24 @@ export default function App() {
                 boxShadow: mode === m ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
               }}
             >
-              {m === "upload" ? "Upload" : "Camera"}
+              {m === "upload" ? "Upload" : m === "camera" ? "Camera" : "Enroll"}
             </button>
           ))}
         </div>
 
         {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
-        {mode === "upload" ? (
+        {mode === "upload" && (
           <UploadMode onFileSelect={handleFileUpload} loading={loading} />
-        ) : (
-          <CameraMode onCapture={handleFrameCapture} loading={loading} />
         )}
+        {mode === "camera" && (
+          <CameraMode
+            onCapture={handleFrameCapture}
+            onVideoRecorded={handleVideoRecorded}
+            loading={loading}
+          />
+        )}
+        {mode === "enroll" && <EnrollMode />}
 
         {loading && (
           <div className="mt-6 space-y-3">

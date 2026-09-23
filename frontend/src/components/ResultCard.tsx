@@ -5,12 +5,12 @@ interface Props {
 }
 
 const COLORS: Record<string, string> = {
-  Pendang: "#6366f1",
-  Urmenita: "#ec4899",
-  Dajes: "#f59e0b",
-  Moraleja: "#10b981",
-  Pogoy: "#3b82f6",
-  Maquilan: "#8b5cf6",
+  "Cui Pendang": "#6366f1",
+  "Jether Urmenita": "#ec4899",
+  "Aldrian Dajes": "#f59e0b",
+  "Axl Moraleja": "#10b981",
+  "Cristian Jim Pogoy": "#3b82f6",
+  "Melvin Maquilan": "#8b5cf6",
   unknown: "#94a3b8",
 };
 
@@ -25,6 +25,20 @@ export default function ResultCard({ result }: Props) {
 
   return (
     <div className="mt-6 space-y-4">
+      {/* Group summary */}
+      {result.summary && (
+        <div
+          className="rounded-2xl px-4 py-3 text-sm font-medium"
+          style={{
+            background: "color-mix(in srgb, var(--accent) 10%, var(--bg-card))",
+            color: "var(--accent)",
+            border: "1px solid color-mix(in srgb, var(--accent) 25%, transparent)",
+          }}
+        >
+          {result.summary}
+        </div>
+      )}
+
       {/* Sentence */}
       <div
         className="rounded-2xl p-5"
@@ -104,26 +118,36 @@ export default function ResultCard({ result }: Props) {
           </h3>
           <div className="space-y-2">
             {timeline.map((entry, i) => (
-              <div key={i} className="flex items-center gap-3 text-sm">
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ background: getColor(entry.person) }}
-                />
-                <span
-                  className="font-medium min-w-[80px]"
-                  style={{ color: getColor(entry.person) }}
-                >
-                  {entry.person}
-                </span>
-                <span style={{ color: "var(--text-muted)" }}>
-                  {formatTime(entry.first_seen)} — {formatTime(entry.last_seen)}
-                </span>
-                <span
-                  className="ml-auto text-xs"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  {(entry.confidence * 100).toFixed(0)}%
-                </span>
+              <div key={i} className="text-sm">
+                <div className="flex items-center gap-3">
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ background: getColor(entry.person) }}
+                  />
+                  <span
+                    className="font-medium min-w-[80px]"
+                    style={{ color: getColor(entry.person) }}
+                  >
+                    {entry.person}
+                  </span>
+                  <span style={{ color: "var(--text-muted)" }}>
+                    {formatTime(entry.first_seen)} — {formatTime(entry.last_seen)}
+                  </span>
+                  <span
+                    className="ml-auto text-xs"
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    {(entry.confidence * 100).toFixed(0)}%
+                  </span>
+                </div>
+                {entry.doing && (
+                  <p
+                    className="mt-1 text-xs leading-relaxed ml-5"
+                    style={{ color: getColor(entry.person) }}
+                  >
+                    {entry.doing}
+                  </p>
+                )}
               </div>
             ))}
           </div>

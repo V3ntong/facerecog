@@ -5,22 +5,30 @@ interface Props {
   loading: boolean;
 }
 
+type PreviewKind = "image" | "video" | null;
+
 export default function UploadMode({ onFileSelect, loading }: Props) {
   const [dragOver, setDragOver] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  const [previewKind, setPreviewKind] = useState<PreviewKind>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback((file: File) => {
     setFileName(file.name);
+    if (preview) URL.revokeObjectURL(preview);
     if (file.type.startsWith("image/")) {
-      const url = URL.createObjectURL(file);
-      setPreview(url);
+      setPreview(URL.createObjectURL(file));
+      setPreviewKind("image");
+    } else if (file.type.startsWith("video/")) {
+      setPreview(URL.createObjectURL(file));
+      setPreviewKind("video");
     } else {
       setPreview(null);
+      setPreviewKind(null);
     }
     onFileSelect(file);
-  }, [onFileSelect]);
+  }, [onFileSelect, preview]);
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -59,11 +67,21 @@ export default function UploadMode({ onFileSelect, loading }: Props) {
 
         {preview ? (
           <div className="flex flex-col items-center gap-3">
-            <img
-              src={preview}
-              alt="Preview"
-              className="max-h-64 rounded-xl object-contain"
-            />
+            {previewKind === "video" ? (
+              <video
+                src={preview}
+                controls
+                muted
+                playsInline
+                className="max-h-64 rounded-xl object-contain"
+              />
+            ) : (
+              <img
+                src={preview}
+                alt="Preview"
+                className="max-h-64 rounded-xl object-contain"
+              />
+            )}
             <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
               {fileName}
             </span>
