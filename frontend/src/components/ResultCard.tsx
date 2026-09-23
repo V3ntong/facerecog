@@ -19,7 +19,7 @@ function getColor(name: string): string {
 }
 
 export default function ResultCard({ result }: Props) {
-  const { people, sentence, type, timeline } = result;
+  const { people, sentence, type, timeline, notice } = result;
   const recognized = people.filter((p) => p.name !== "unknown");
   const unknowns = people.filter((p) => p.name === "unknown");
 
@@ -34,6 +34,20 @@ export default function ResultCard({ result }: Props) {
           {sentence}
         </p>
       </div>
+
+      {/* Description notice */}
+      {notice && (
+        <div
+          className="rounded-2xl px-4 py-3 text-sm"
+          style={{
+            background: "color-mix(in srgb, var(--warning, #f59e0b) 10%, var(--bg-card))",
+            color: "var(--warning, #f59e0b)",
+            border: "1px solid color-mix(in srgb, var(--warning, #f59e0b) 25%, transparent)",
+          }}
+        >
+          {notice}
+        </div>
+      )}
 
       {/* Person chips */}
       {recognized.length > 0 && (

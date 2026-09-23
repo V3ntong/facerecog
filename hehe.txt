@@ -1,0 +1,78 @@
+ROLE: Act as a senior full-stack engineer. Implement the following three 
+features. For each, show me the relevant code changes and confirm you 
+tested it before reporting done.
+
+FEATURE 1: Camera video recording (not just photo capture)
+- Add a "Record" button alongside the existing "Capture" button on the 
+  Camera tab. Capture keeps taking a single still photo, as it does now.
+- Record starts recording from the live stream using MediaRecorder (webm), 
+  shows a visible recording indicator and elapsed time, and a "Stop 
+  Recording" button.
+- Cap recording length at 60 seconds (auto-stop) and show a countdown 
+  in the last 10 seconds.
+- On stop, send the recorded video to the same /api/recognize pipeline 
+  already used for uploaded videos, and show the same timeline result UI.
+- Handle and display a clear error if MediaRecorder isn't supported.
+
+FEATURE 2: Group / multi-person summary detection
+- When recognition finds 2 or more enrolled people in a single image or 
+  video, don't just list them as separate chips — add a summary line 
+  above the results, e.g.:
+  - "All 6 enrolled people are in this photo." (when all 6 match)
+  - "4 of 6 enrolled people are in this photo: Pendang, Dajes, Moraleja, 
+    Maquilan." (partial match)
+  - Keep the existing per-person chips/timeline below the summary line, 
+    don't remove them.
+- This logic belongs in the backend response (e.g. a "summary" field in 
+  the /api/recognize response), not computed ad hoc in the frontend, so 
+  it's consistent and testable.
+- Add a unit test for the summary text at 0, 1, partial, and all-6 matches.
+
+FEATURE 3: "Enroll New Face" flow
+- Add an "Enroll New Face" button on the main screen (near Upload/Camera 
+  tabs).
+- Clicking it opens a simple form: capture from camera OR upload a photo, 
+  plus a required Name field. Reuse the existing face detection to reject 
+  photos with 0 or 2+ faces (with a clear message) before allowing submit.
+- On submit:
+  1. If the name matches one of the 6 existing enrolled people (case- 
+     insensitive), save the new photo into C:\FaceDataset\<ExistingName>\ 
+     using a unique filename, generate its embedding, and add it to 
+     FaceEmbedding linked to the existing PersonId. Refresh the in-memory 
+     embedding cache immediately so the new photo counts on the very next 
+     recognition call.
+  2. If the name is new, create a new folder C:\FaceDataset\<NewName>\, 
+     save the photo there, insert a new row in Person, generate the 
+     embedding, add it to FaceEmbedding, and refresh the cache.
+- Show a success confirmation, e.g. "Added new photo for Maquilan" or 
+  "Enrolled new person: <Name>".
+- Validate the name (trim whitespace, block empty/duplicate-looking 
+  variants like extra spaces, reasonable max length).
+
+Keep the UI clean and minimal, matching the existing design — no extra 
+wordiness. Report back: what you built, how you tested each feature, 
+and any limitation I should know about. Update all 6 enrolled names from surname-only to full name (First + Surname):
+
+Pendang    → Cui Pendang
+Urmenita   → Jether Urmenita
+Dajes      → Aldrian Dajes
+Moraleja   → Axl Moraleja
+Pogoy      → Cristian Jim Pogoy
+Maquilan   → Melvin Maquilan
+
+Steps:
+1. Update the Name column in dbo.Person for each of the 6 existing rows — 
+   do NOT delete and recreate them, since FaceEmbedding rows reference 
+   them by PersonId and must stay linked.
+2. Rename the 6 dataset folders under C:\FaceDataset\ to match 
+   (e.g. Pendang → "Cui Pendang"), and update any SourceRef or file-path 
+   values that reference the old folder names.
+3. Update the frontend so results, chips, and the summary sentence use 
+   the new full names (e.g. "Melvin Maquilan spotted smiling.").
+4. Refresh the in-memory embedding/name cache so this takes effect without 
+   needing to re-run full enrollment.
+5. Run the two verification queries I've been using in SSMS 
+   (SELECT from dbo.Person and dbo.FaceEmbedding) and confirm the names 
+   updated correctly and embedding counts per person are unchanged.
+
+Report back the updated Person table contents when done. 

@@ -131,3 +131,10 @@ Exact Windows setup steps:
 - Live camera recognition loop (send frame every ~1s, draw overlay boxes)
 - Frontend: show face bounding boxes on the preview image
 - Dark mode persistence in localStorage
+
+
+
+sdfahsdjkashjhdsjkhfkljasddhf
+fasdjhkffgasdhjfgasdhjf
+asdfjhgasdlkjfhasdhjff
+asdfhjgasdhjfgasdjkhfg

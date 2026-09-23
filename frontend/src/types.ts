@@ -18,6 +18,7 @@ export interface RecognitionResult {
   sentence: string;
   timeline?: TimelineEntry[];
   filename?: string;
+  notice?: string | null;
 }
 
 export interface HealthResponse {

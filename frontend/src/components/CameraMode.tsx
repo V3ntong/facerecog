@@ -20,13 +20,18 @@ export default function CameraMode({ onCapture, loading }: Props) {
         audio: false,
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
       setStreaming(true);
     } catch (e: any) {
-      setCameraError(e.message || "Could not access camera");
+      const name = e?.name || "";
+      if (name === "NotAllowedError" || name === "SecurityError") {
+        setCameraError("Camera access denied. Allow camera permission in the browser and try again.");
+      } else if (name === "NotFoundError" || name === "OverconstrainedError") {
+        setCameraError("No camera found on this device.");
+      } else if (name === "NotReadableError") {
+        setCameraError("Camera is in use by another app. Close it and try again.");
+      } else {
+        setCameraError(e?.message || "Could not access camera");
+      }
     }
   }, []);
 
@@ -37,6 +42,21 @@ export default function CameraMode({ onCapture, loading }: Props) {
     }
     setStreaming(false);
   }, []);
+
+  // Attach the stream once the <video> element is actually mounted
+  // (it is conditionally rendered only when `streaming` is true).
+  useEffect(() => {
+    if (!streaming || !videoRef.current) return;
+    const video = videoRef.current;
+    video.srcObject = streamRef.current;
+    const onLoaded = () => {
+      video.play().catch((err) =>
+        setCameraError("Could not start video playback: " + (err?.message || err))
+      );
+    };
+    video.addEventListener("loadedmetadata", onLoaded);
+    return () => video.removeEventListener("loadedmetadata", onLoaded);
+  }, [streaming]);
 
   const capture = useCallback(() => {
     const video = videoRef.current;

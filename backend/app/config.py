@@ -26,7 +26,11 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE_MB: int = 100
     RATE_LIMIT_PER_MINUTE: int = 60
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {
+        # .env lives at the repo root, not in the backend dir where uvicorn runs.
+        "env_file": str(Path(__file__).resolve().parents[2] / ".env"),
+        "env_file_encoding": "utf-8",
+    }
 
     @property
     def connection_string(self) -> str:

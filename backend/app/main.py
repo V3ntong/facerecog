@@ -14,6 +14,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting WhoIsThere server...")

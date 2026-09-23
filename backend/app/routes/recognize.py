@@ -10,12 +10,11 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional
 from app.config import settings
+from app.services import recognition as recognition_service
 from app.services.recognition import (
     recognize_faces,
     recognize_video_frames,
     build_sentence,
-    refresh_embeddings,
-    embeddings,
 )
 from app.services.description import describe_people
 
@@ -46,7 +45,7 @@ ALLOWED_VIDEO_TYPES = {"video/mp4", "video/quicktime", "video/x-msvideo", "video
 
 @router.get("/health")
 async def health():
-    emb_count = len(embeddings) if embeddings is not None else 0
+    emb_count = len(recognition_service.embeddings) if recognition_service.embeddings is not None else 0
     return {
         "status": "ok",
         "embeddings_loaded": emb_count,
@@ -99,14 +98,17 @@ async def _process_image(
     boxes = [f.box for f in faces]
 
     descriptions = {}
+    notices: list[str] = []
     recognized_names = [n for n in names if n != "unknown"]
     if recognized_names:
         try:
             descriptions = await describe_people(
                 [image_bytes], recognized_names,
                 [b for b, n in zip(boxes, names) if n != "unknown"],
+                notices,
             )
         except Exception as e:
+            notices.append(f"AI description failed: {e}")
             logger.warning("Description failed: %s", e)
 
     people = []
@@ -128,6 +130,7 @@ async def _process_image(
         "people": people,
         "sentence": sentence,
         "filename": filename,
+        "notice": "; ".join(notices) if notices else None,
     }
 
 
@@ -221,14 +224,17 @@ async def recognize_frame(
     boxes = [f.box for f in faces]
 
     descriptions = {}
+    notices: list[str] = []
     recognized_names = [n for n in names if n != "unknown"]
     if describe and recognized_names:
         try:
             descriptions = await describe_people(
                 [contents], recognized_names,
                 [b for b, n in zip(boxes, names) if n != "unknown"],
+                notices,
             )
         except Exception as e:
+            notices.append(f"AI description failed: {e}")
             logger.warning("Description failed: %s", e)
 
     people = []
@@ -246,4 +252,5 @@ async def recognize_frame(
         "type": "frame",
         "people": people,
         "sentence": sentence,
+        "notice": "; ".join(notices) if notices else None,
     }
