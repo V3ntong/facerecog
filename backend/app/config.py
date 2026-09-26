@@ -15,9 +15,17 @@ class Settings(BaseSettings):
     RECOGNITION_THRESHOLD: float = 0.45
     FACE_MIN_SIZE: int = 40
 
-    AI_PROVIDER: str = "anthropic"
-    AI_MODEL: str = "claude-sonnet-4-20250514"
-    AI_API_KEY: str = ""
+    AI_PROVIDER: str = "gemini"
+    AI_MODEL: str = "gemini-3.5-flash-lite"
+    AI_FALLBACK_MODEL: str = "gemini-flash-latest"
+    AI_MAX_RETRIES: int = 1
+    AI_TIMEOUT_SECONDS: float = 25.0
+    GEMINI_API_KEY: str = ""
+    GROQ_API_KEY: str = ""
+    OPENAI_API_KEY: str = ""
+
+    VIDEO_DESCRIBE_FRAMES: int = 4
+    VIDEO_FRAME_MAX_DIM: int = 512
 
     DATASET_DIR: str = r"C:\FaceDataset"
 

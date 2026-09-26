@@ -6,6 +6,7 @@ from app.config import settings
 from app.database import init_db
 from app.services.recognition import load_embeddings
 from app.routes.recognize import router as recognize_router
+from app.routes.enroll import router as enroll_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,6 +47,7 @@ app.add_middleware(
 )
 
 app.include_router(recognize_router)
+app.include_router(enroll_router)
 
 
 if __name__ == "__main__":

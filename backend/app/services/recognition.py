@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import logging
 import time
@@ -289,6 +290,40 @@ def recognize_video_frames(
     return timeline
 
 
+def sample_segment_frames(
+    frames: list[tuple[np.ndarray, float]],
+    first_seen: float,
+    last_seen: float,
+    budget: int,
+) -> list[tuple[np.ndarray, float]]:
+    """Evenly sample up to `budget` frames within a person's [first_seen, last_seen]
+    segment. Frames are kept in chronological order. Used to bound the number of
+    images sent to the vision LLM per timeline entry (controls token cost)."""
+    window = [(f, t) for f, t in frames if first_seen <= t <= last_seen]
+    if not window:
+        return []
+    if len(window) <= budget:
+        return window
+    idx = np.linspace(0, len(window) - 1, budget, dtype=int)
+    return [window[i] for i in idx]
+
+
+def encode_frame_jpeg(frame_rgb: np.ndarray, max_dim: int = 512) -> bytes:
+    """Downscale a frame to at most `max_dim` px on the longest side and JPEG-encode
+    it (quality 85). Caps Gemini image tokens while keeping enough detail to
+    describe activity."""
+    h, w = frame_rgb.shape[:2]
+    scale = min(1.0, max_dim / max(h, w))
+    if scale < 1.0:
+        frame_rgb = cv2.resize(frame_rgb, (int(w * scale), int(h * scale)))
+    ok, buf = cv2.imencode(
+        ".jpg",
+        cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR),
+        [cv2.IMWRITE_JPEG_QUALITY, 85],
+    )
+    return buf.tobytes()
+
+
 def build_sentence(names: list[str], doing_parts: list[str]) -> str:
     """Build the final output sentence from recognized names and actions."""
     unique_names = list(dict.fromkeys(n for n in names if n != "unknown"))
@@ -308,6 +343,48 @@ def build_sentence(names: list[str], doing_parts: list[str]) -> str:
     doing_str = ""
     if doing_texts:
         combined = list(dict.fromkeys(doing_texts))
-        doing_str = " " + " and ".join(combined)
+        short = [d for d in combined if len(d.split()) <= 4]
+        long_asides = [d for d in combined if len(d.split()) > 4]
 
-    return f"{name_str} spotted{doing_str}."
+        body = " and ".join(short)
+        if long_asides:
+            body = (body + " " if body else "") + " ".join(long_asides)
+
+        if body:
+            doing_str = f"{name_str} spotted. {body}".rstrip()
+            if not doing_str.endswith("."):
+                doing_str += "."
+            return doing_str
+
+    return f"{name_str} spotted."
+
+
+def build_summary(
+    recognized_names: list[str],
+    enrolled_names: list[str],
+    medium: str = "photo",
+) -> Optional[str]:
+    """Group summary shown to the user when 2+ distinct enrolled people are
+    recognized. Returns None for 0/1 recognized people or an empty roster.
+
+    enrolled_names is the raw per-embedding name list loaded in memory
+    (duplicates possible); the unique count is what "N of M" refers to.
+    """
+    enrolled = set(enrolled_names)
+    if not enrolled:
+        return None
+
+    recognized = list(
+        dict.fromkeys(n for n in recognized_names if n in enrolled)
+    )
+    total = len(enrolled)
+
+    if len(recognized) < 2:
+        return None
+    if len(recognized) == total:
+        return f"All {total} enrolled people are in this {medium}."
+
+    return (
+        f"{len(recognized)} of {total} enrolled people are in this "
+        f"{medium}: {', '.join(recognized)}."
+    )

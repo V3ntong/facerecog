@@ -14,7 +14,10 @@ from app.services import recognition as recognition_service
 from app.services.recognition import (
     recognize_faces,
     recognize_video_frames,
+    sample_segment_frames,
+    encode_frame_jpeg,
     build_sentence,
+    build_summary,
 )
 from app.services.description import describe_people
 
@@ -41,6 +44,10 @@ def _check_rate_limit(client_ip: str) -> bool:
 
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/bmp", "image/webp", "image/gif"}
 ALLOWED_VIDEO_TYPES = {"video/mp4", "video/quicktime", "video/x-msvideo", "video/webm"}
+
+
+def _summary(names: list[str], medium: str) -> Optional[str]:
+    return build_summary(names, recognition_service.person_names, medium=medium)
 
 
 @router.get("/health")
@@ -120,7 +127,6 @@ async def _process_image(
         if doing and face.name != "unknown":
             doing_parts.append(doing)
 
-    recognized = [f.name for f in faces if f.name != "unknown"]
     sentence = build_sentence(
         [f.name for f in faces], doing_parts
     )
@@ -129,6 +135,7 @@ async def _process_image(
         "type": "image",
         "people": people,
         "sentence": sentence,
+        "summary": _summary([f.name for f in faces], "photo"),
         "filename": filename,
         "notice": "; ".join(notices) if notices else None,
     }
@@ -178,16 +185,48 @@ async def _process_video(
 
         timeline = recognize_video_frames(frames)
         all_names = [t["person"] for t in timeline if t["person"] != "unknown"]
-        doing_parts = [t.get("doing", "") for t in timeline if t.get("doing")]
 
-        sentence = build_sentence(all_names, doing_parts)
+        notices: list[str] = []
+        for entry in timeline:
+            if entry["person"] == "unknown":
+                continue
+            seg_frames = sample_segment_frames(
+                frames,
+                entry["first_seen"],
+                entry["last_seen"],
+                settings.VIDEO_DESCRIBE_FRAMES,
+            )
+            if not seg_frames:
+                continue
+            frame_bytes = [
+                encode_frame_jpeg(f, settings.VIDEO_FRAME_MAX_DIM)
+                for f, _ in seg_frames
+            ]
+            try:
+                descriptions = await describe_people(
+                    frame_bytes, [entry["person"]], [], notices, video=True
+                )
+            except Exception as e:
+                notices.append(f"AI description failed: {e}")
+                logger.warning("Description failed: %s", e)
+                descriptions = {}
+            entry["doing"] = descriptions.get(entry["person"], "")
+
+        # Activity descriptions stay only on the timeline; the banner sentence
+        # and person pills show name (+%) to avoid repeating the same text.
+        sentence = build_sentence(all_names, [])
 
         return {
             "type": "video",
-            "people": [{"name": t["person"], "score": t["confidence"]} for t in timeline],
+            "people": [
+                {"name": t["person"], "score": t["confidence"]}
+                for t in timeline
+            ],
             "sentence": sentence,
+            "summary": _summary(all_names, "video"),
             "timeline": timeline,
             "filename": filename,
+            "notice": "; ".join(notices) if notices else None,
         }
 
     finally:
@@ -252,5 +291,6 @@ async def recognize_frame(
         "type": "frame",
         "people": people,
         "sentence": sentence,
+        "summary": _summary(names, "photo"),
         "notice": "; ".join(notices) if notices else None,
     }
