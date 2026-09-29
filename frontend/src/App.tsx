@@ -1,53 +1,95 @@
-import { useState, useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { RecognitionResult } from "./types";
 import { recognizeFile, recognizeFrame } from "./api";
+import { PEOPLE, spottedNames } from "./people";
+import { providerLabel } from "./format";
+import useHealth from "./useHealth";
+import ModeTabs from "./components/ModeTabs";
+import Rail from "./components/Rail";
+import Slip from "./components/Slip";
 import UploadMode from "./components/UploadMode";
 import CameraMode from "./components/CameraMode";
 import EnrollMode from "./components/EnrollMode";
-import ResultCard from "./components/ResultCard";
-import Header from "./components/Header";
-import ErrorBanner from "./components/ErrorBanner";
+import EvidencePlate from "./components/EvidencePlate";
+import type { Evidence } from "./components/EvidencePlate";
+import AppearanceBars from "./components/AppearanceBars";
+import Sightings from "./components/Sightings";
 
 type Mode = "upload" | "camera" | "enroll";
+
+const TABS: { id: Mode; label: string }[] = [
+  { id: "upload", label: "Photo or clip" },
+  { id: "camera", label: "Camera" },
+  { id: "enroll", label: "Add a face" },
+];
+
+const THEME_KEY = "ohahay:theme";
+
+function initialDark(): boolean {
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved === "dark") return true;
+  if (saved === "light") return false;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+/** A browser network failure says nothing a reader can act on, so say something. */
+function readableError(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : "";
+  if (!message || /failed to fetch|network|load failed/i.test(message)) {
+    return "The server didn't answer. Start the backend, then try again.";
+  }
+  return message || fallback;
+}
 
 export default function App() {
   const [mode, setMode] = useState<Mode>("upload");
   const [result, setResult] = useState<RecognitionResult | null>(null);
+  const [resultKey, setResultKey] = useState(0);
+  const [evidence, setEvidence] = useState<Evidence | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [dark, setDark] = useState(() => {
-    if (typeof window !== "undefined") {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
-    }
-    return false;
-  });
+  const [dark, setDark] = useState(initialDark);
+  const { health, failed: healthFailed, refresh: refreshHealth } = useHealth();
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
+    localStorage.setItem(THEME_KEY, dark ? "dark" : "light");
   }, [dark]);
 
+  // Reclaim the object URL of whichever print is being replaced.
+  useEffect(() => {
+    if (!evidence) return;
+    return () => URL.revokeObjectURL(evidence.url);
+  }, [evidence]);
+
   const handleFileUpload = useCallback(async (file: File) => {
+    setEvidence({
+      url: URL.createObjectURL(file),
+      kind: file.type.startsWith("video/") ? "video" : "image",
+    });
     setLoading(true);
     setError(null);
     setResult(null);
     try {
-      const res = await recognizeFile(file);
-      setResult(res);
-    } catch (e: any) {
-      setError(e.message || "Something went wrong");
+      setResult(await recognizeFile(file));
+      setResultKey((key) => key + 1);
+    } catch (caught) {
+      setError(readableError(caught, "That file couldn't be read."));
     } finally {
       setLoading(false);
     }
   }, []);
 
   const handleFrameCapture = useCallback(async (blob: Blob) => {
+    setEvidence({ url: URL.createObjectURL(blob), kind: "image" });
     setLoading(true);
     setError(null);
+    setResult(null);
     try {
-      const res = await recognizeFrame(blob);
-      setResult(res);
-    } catch (e: any) {
-      setError(e.message || "Frame recognition failed");
+      setResult(await recognizeFrame(blob));
+      setResultKey((key) => key + 1);
+    } catch (caught) {
+      setError(readableError(caught, "That frame couldn't be read."));
     } finally {
       setLoading(false);
     }
@@ -61,54 +103,85 @@ export default function App() {
     [handleFileUpload]
   );
 
+  const spotted = result ? spottedNames(result.people) : [];
+  const status = loading
+    ? evidence?.kind === "video"
+      ? "Looking for anyone it knows in this clip…"
+      : "Looking for anyone it knows…"
+    : null;
+
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "var(--bg-primary)" }}>
-      <Header dark={dark} onToggleDark={() => setDark(!dark)} />
+    <div className="flex min-h-screen flex-col lg:flex-row">
+      <Rail
+        health={health}
+        healthFailed={healthFailed}
+        spotted={spotted}
+        resultKey={resultKey}
+        dark={dark}
+        onToggleDark={() => setDark((value) => !value)}
+      />
 
-      <main className="flex-1 w-full max-w-3xl mx-auto px-4 pb-12">
-        <div className="flex justify-center gap-1 mb-6 mt-2 p-1 rounded-xl" style={{ background: "var(--bg-secondary)" }}>
-          {(["upload", "camera", "enroll"] as Mode[]).map((m) => (
-            <button
-              key={m}
-              onClick={() => { setMode(m); setResult(null); setError(null); }}
-              className="px-6 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer"
-              style={{
-                background: mode === m ? "var(--bg-card)" : "transparent",
-                color: mode === m ? "var(--accent)" : "var(--text-secondary)",
-                boxShadow: mode === m ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
-              }}
-            >
-              {m === "upload" ? "Upload" : m === "camera" ? "Camera" : "Enroll"}
-            </button>
-          ))}
-        </div>
-
-        {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
-
-        {mode === "upload" && (
-          <UploadMode onFileSelect={handleFileUpload} loading={loading} />
-        )}
-        {mode === "camera" && (
-          <CameraMode
-            onCapture={handleFrameCapture}
-            onVideoRecorded={handleVideoRecorded}
-            loading={loading}
+      <main className="min-w-0 flex-1">
+        <div className="w-full max-w-[46rem] px-5 py-6 lg:px-10 lg:py-9">
+          <ModeTabs
+            tabs={TABS}
+            active={mode}
+            onSelect={(id) => {
+              setMode(id as Mode);
+              setError(null);
+            }}
           />
-        )}
-        {mode === "enroll" && <EnrollMode />}
 
-        {loading && (
-          <div className="mt-6 space-y-3">
-            <div className="skeleton h-12 w-full" />
-            <div className="skeleton h-8 w-3/4" />
-            <div className="skeleton h-8 w-1/2" />
+          <div
+            id={`panel-${mode}`}
+            role="tabpanel"
+            aria-labelledby={`tab-${mode}`}
+            className="pt-5"
+          >
+            {mode === "upload" && (
+              <UploadMode onFileSelect={handleFileUpload} loading={loading} />
+            )}
+            {mode === "camera" && (
+              <CameraMode
+                onCapture={handleFrameCapture}
+                onVideoRecorded={handleVideoRecorded}
+                loading={loading}
+              />
+            )}
+            {mode === "enroll" && <EnrollMode onEnrolled={refreshHealth} />}
           </div>
-        )}
 
-        {!loading && result && <ResultCard result={result} />}
+          {error && (
+            <Slip kind="failure" onDismiss={() => setError(null)} className="mt-4">
+              {error}
+            </Slip>
+          )}
 
-        <div className="mt-8 text-center text-xs" style={{ color: "var(--text-muted)" }}>
-          This app uses face recognition. Only the 6 enrolled people are ever matched.
+          {evidence && (
+            <div className="mt-5">
+              <EvidencePlate
+                evidence={evidence}
+                people={result && result.type !== "video" ? result.people : []}
+              />
+            </div>
+          )}
+
+          {status && <p className="type-record mt-3 text-slate">{status}</p>}
+
+          {!loading && result && (
+            <>
+              <Sightings result={result} resultKey={resultKey} />
+              {result.timeline && result.timeline.length > 0 && (
+                <AppearanceBars timeline={result.timeline} />
+              )}
+            </>
+          )}
+
+          <p className="type-record mt-8 max-w-[64ch] text-slate">
+            When it describes what someone is doing, that photo goes to{" "}
+            {health ? providerLabel(health.ai_provider) : "a vision model"}. Matching only ever
+            happens against the {PEOPLE.length} people this desk keeps prints of.
+          </p>
         </div>
       </main>
     </div>

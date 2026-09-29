@@ -14,3 +14,14 @@ export function formatSpan(start: number, end: number): string {
 export function formatMatch(score: number): string {
   return `${Math.round(score * 100)}%`;
 }
+
+const PROVIDERS: Record<string, string> = {
+  gemini: "Gemini",
+  groq: "Groq",
+  openai: "OpenAI",
+};
+
+/** The vision model's name as a reader would say it. */
+export function providerLabel(id: string): string {
+  return PROVIDERS[id] ?? id;
+}

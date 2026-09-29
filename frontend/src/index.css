@@ -1,53 +1,184 @@
 @import "tailwindcss";
 
+/* ────────────────────────────────────────────────────────────────
+   Ohahay — a sightings desk for six people.
+
+   One sheet of cool newsprint, one printing ink, one fluoro spot ink
+   for the wax pencil. The wax pencil is the only accent in the whole
+   interface and it means exactly one thing: the machine is paying
+   attention — recording, recognising, registering a face. It is never
+   a button colour and never a selected state.
+   ──────────────────────────────────────────────────────────────── */
+
 :root {
-  --bg-primary: #f8fafc;
-  --bg-secondary: #f1f5f9;
-  --bg-card: #ffffff;
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #94a3b8;
-  --border: #e2e8f0;
-  --accent: #6366f1;
-  --accent-hover: #4f46e5;
-  --success: #10b981;
-  --error: #ef4444;
-  --warning: #f59e0b;
+  --paper: #e7e9e4;
+  --flash: #fbfbf9;
+  --ink: #151a18;
+  --slate: #5f6a64;
+  --dim: #b9c0b8;
+  --rule: #c9cec6;
+  --mark: #f0296e;
+  --mark-ink: #c01558;
+  color-scheme: light;
 }
 
+/* The darkroom: the same page with the lights off. */
 .dark {
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-card: #1e293b;
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --border: #334155;
-  --accent: #818cf8;
-  --accent-hover: #6366f1;
-  --success: #34d399;
-  --error: #f87171;
-  --warning: #fbbf24;
+  --paper: #1b201e;
+  --flash: #222824;
+  --ink: #e9ebe5;
+  --slate: #9aa49d;
+  --dim: #4a534d;
+  --rule: #333b37;
+  --mark: #ff3d80;
+  --mark-ink: #ff6fa1;
+  color-scheme: dark;
 }
 
-body {
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  font-family: system-ui, -apple-system, sans-serif;
-  transition: background-color 0.2s, color 0.2s;
+@theme inline {
+  --color-paper: var(--paper);
+  --color-flash: var(--flash);
+  --color-ink: var(--ink);
+  --color-slate: var(--slate);
+  --color-dim: var(--dim);
+  --color-rule: var(--rule);
+  --color-mark: var(--mark);
+  --color-mark-ink: var(--mark-ink);
+  --font-sans: "Archivo Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "Newsreader Variable", Georgia, "Times New Roman", serif;
 }
 
-* {
-  box-sizing: border-box;
+@layer base {
+  html {
+    background: var(--paper);
+  }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Archivo Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 17px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    font-synthesis: none;
+  }
+
+  ::selection {
+    background: var(--mark);
+    color: var(--flash);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
 }
 
-@keyframes pulse-skeleton {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 0.7; }
+@layer components {
+  /* The instrument's voice: Archivo. Pressed narrow for names and for the
+     verdict, so a page made of records still has a shout in it. */
+  .type-nameplate {
+    font-weight: 800;
+    font-stretch: 100%;
+    letter-spacing: -0.035em;
+    line-height: 0.9;
+  }
+  .type-rollcall {
+    font-weight: 700;
+    font-stretch: 62%;
+    letter-spacing: -0.005em;
+    line-height: 1.04;
+  }
+  .type-verdict {
+    font-weight: 800;
+    font-stretch: 62%;
+    letter-spacing: -0.012em;
+    line-height: 0.98;
+  }
+  .type-ui {
+    font-weight: 600;
+    font-size: 15px;
+    line-height: 1.35;
+  }
+  .type-record {
+    font-weight: 500;
+    font-size: 12.5px;
+    line-height: 1.45;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* The columnist's voice. Newsreader italic, and nothing else — the one
+     place the app is allowed to be funny, so nothing competes with it. */
+  .type-aside {
+    font-family: "Newsreader Variable", Georgia, "Times New Roman", serif;
+    font-style: italic;
+    font-weight: 400;
+    font-size: 21px;
+    line-height: 1.5;
+  }
+
+  /* One orchestrated moment per result: a wax ring is drawn around each face
+     it recognised, the roster is marked, the verdict is printed. Every base
+     state is the finished state, so under prefers-reduced-motion the whole
+     thing simply arrives already correct. */
+  .wax-stroke {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+    animation: wax-draw 0.55s cubic-bezier(0.22, 0.68, 0.28, 1) backwards;
+  }
+  .roster-mark {
+    transform-origin: left center;
+    animation: roster-mark 0.3s cubic-bezier(0.3, 0.9, 0.4, 1) backwards;
+  }
+  .verdict-print {
+    animation: verdict-print 0.34s cubic-bezier(0.3, 0.9, 0.4, 1) backwards;
+  }
+  .attention-dot {
+    animation: attention 1.4s ease-in-out infinite;
+  }
 }
 
-.skeleton {
-  animation: pulse-skeleton 1.5s ease-in-out infinite;
-  background: var(--bg-secondary);
-  border-radius: 0.5rem;
+@keyframes wax-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+
+@keyframes roster-mark {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes verdict-print {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@keyframes attention {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wax-stroke,
+  .roster-mark,
+  .verdict-print,
+  .attention-dot {
+    animation: none;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
 }
